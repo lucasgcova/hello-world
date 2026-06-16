@@ -6,6 +6,7 @@ import {
   getValidAccessToken,
   driveSearch,
   gmailSearch,
+  gmailSend,
 } from "@/lib/integrations/google";
 import type { TaskPriority } from "@/lib/types";
 
@@ -103,6 +104,20 @@ export const AI_TOOLS: Anthropic.Tool[] = [
         query: { type: "string", description: "Gmail search query." },
       },
       required: ["query"],
+    },
+  },
+  {
+    name: "send_email",
+    description:
+      "Send an email from the connected Gmail account. Only call this when the user explicitly asks to send or email someone, and you have a clear recipient, subject, and body. Confirm details with the user first if anything is ambiguous.",
+    input_schema: {
+      type: "object",
+      properties: {
+        to: { type: "string", description: "Recipient email address." },
+        subject: { type: "string", description: "Email subject." },
+        body: { type: "string", description: "Plain-text email body." },
+      },
+      required: ["to", "subject", "body"],
     },
   },
 ];
@@ -246,15 +261,27 @@ export async function executeTool(
       }
 
       case "search_drive":
-      case "search_email": {
+      case "search_email":
+      case "send_email": {
         const admin = createAdminClient();
         if (!admin) {
-          return "Google search isn't available — the server is missing SUPABASE_SERVICE_ROLE_KEY.";
+          return "Google features aren't available — the server is missing SUPABASE_SERVICE_ROLE_KEY.";
         }
         const token = await getValidAccessToken(admin, ctx.workspaceId);
         if (!token) {
           return "Google isn't connected for this workspace. Connect it in Settings → Integrations.";
         }
+
+        if (name === "send_email") {
+          await gmailSend(
+            token,
+            String(input.to),
+            String(input.subject),
+            String(input.body),
+          );
+          return `Email sent to ${input.to}.`;
+        }
+
         const query = String(input.query ?? "");
 
         if (name === "search_drive") {

@@ -81,6 +81,17 @@ export interface Task {
   labels?: Label[];
 }
 
+export interface TaskAttachment {
+  id: string;
+  task_id: string;
+  title: string;
+  url: string;
+  mime_type: string | null;
+  source: "link" | "drive";
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface Comment {
   id: string;
   task_id: string;

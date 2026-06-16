@@ -165,6 +165,39 @@ export async function driveSearch(
   }));
 }
 
+export async function gmailSend(
+  accessToken: string,
+  to: string,
+  subject: string,
+  body: string,
+): Promise<void> {
+  const raw = [
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    "Content-Type: text/plain; charset=utf-8",
+    "",
+    body,
+  ].join("\r\n");
+  const encoded = Buffer.from(raw)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+  const res = await fetch(
+    "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ raw: encoded }),
+    },
+  );
+  if (!res.ok) throw new Error(`Gmail send failed: ${res.status}`);
+}
+
 export interface EmailSummary {
   id: string;
   snippet: string;

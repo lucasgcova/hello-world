@@ -5,12 +5,19 @@ import { createClient } from "@/lib/supabase/client";
 import { addComment } from "@/lib/actions/tasks";
 import { setTaskLabels, createLabel } from "@/lib/actions/labels";
 import {
+  addTaskAttachment,
+  removeTaskAttachment,
+} from "@/lib/actions/attachments";
+import { driveSearchAction } from "@/lib/actions/google";
+import type { DriveFile } from "@/lib/integrations/google";
+import {
   PRIORITY_META,
   type Comment,
   type Label,
   type Profile,
   type ProjectStatus,
   type Task,
+  type TaskAttachment,
   type TaskPriority,
 } from "@/lib/types";
 
@@ -63,6 +70,12 @@ export function TaskDialog({
   const [mentioned, setMentioned] = useState<Record<string, string>>({});
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 
+  const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [driveQuery, setDriveQuery] = useState("");
+  const [driveResults, setDriveResults] = useState<DriveFile[] | null>(null);
+  const [driveBusy, setDriveBusy] = useState(false);
+
   const isTemp = task.id.startsWith("temp-");
 
   useEffect(() => {
@@ -114,6 +127,65 @@ export function TaskDialog({
       supabase.removeChannel(channel);
     };
   }, [task.id, isTemp, supabase]);
+
+  // Load attachments.
+  useEffect(() => {
+    if (isTemp) return;
+    let active = true;
+    (async () => {
+      const { data } = await supabase
+        .from("task_attachments")
+        .select("*")
+        .eq("task_id", task.id)
+        .order("created_at", { ascending: true });
+      if (active) setAttachments((data ?? []) as TaskAttachment[]);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [task.id, isTemp, supabase]);
+
+  async function addLink() {
+    const url = linkUrl.trim();
+    if (!url || isTemp) return;
+    setLinkUrl("");
+    const res = await addTaskAttachment({
+      taskId: task.id,
+      projectId,
+      title: url,
+      url,
+      source: "link",
+    });
+    if (res.attachment) setAttachments((prev) => [...prev, res.attachment!]);
+  }
+
+  async function attachDrive(file: DriveFile) {
+    const res = await addTaskAttachment({
+      taskId: task.id,
+      projectId,
+      title: file.name,
+      url: file.link,
+      source: "drive",
+      mimeType: file.mimeType,
+    });
+    if (res.attachment) {
+      setAttachments((prev) => [...prev, res.attachment!]);
+      setDriveResults((prev) => prev?.filter((f) => f.id !== file.id) ?? null);
+    }
+  }
+
+  async function removeAttachment(id: string) {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+    await removeTaskAttachment({ id, projectId });
+  }
+
+  async function searchDrive() {
+    if (!driveQuery.trim()) return;
+    setDriveBusy(true);
+    const res = await driveSearchAction(driveQuery.trim());
+    setDriveBusy(false);
+    setDriveResults(res.files ?? []);
+  }
 
   function toggleLabel(id: string) {
     setSelectedLabelIds((prev) =>
@@ -229,6 +301,101 @@ export function TaskDialog({
               placeholder="Add details…"
               className="w-full resize-none rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/40"
             />
+
+            {/* Attachments */}
+            {!isTemp && (
+              <div className="mt-6">
+                <h3 className="mb-2 text-xs font-medium uppercase tracking-wide opacity-40">
+                  Attachments
+                </h3>
+                {attachments.length > 0 && (
+                  <div className="mb-2 space-y-1">
+                    {attachments.map((a) => (
+                      <div
+                        key={a.id}
+                        className="flex items-center gap-2 rounded-md border px-2 py-1.5 text-sm"
+                      >
+                        <span>{a.source === "drive" ? "📄" : "🔗"}</span>
+                        <a
+                          href={a.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex-1 truncate text-indigo-600 hover:underline"
+                        >
+                          {a.title}
+                        </a>
+                        <button
+                          onClick={() => removeAttachment(a.id)}
+                          className="text-xs text-red-500 hover:text-red-600"
+                        >
+                          remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    value={linkUrl}
+                    onChange={(e) => setLinkUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addLink();
+                      }
+                    }}
+                    placeholder="Paste a link…"
+                    className="flex-1 rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/40"
+                  />
+                  <button
+                    onClick={addLink}
+                    className="rounded-md border px-2 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5"
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    value={driveQuery}
+                    onChange={(e) => setDriveQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        searchDrive();
+                      }
+                    }}
+                    placeholder="Search Google Drive…"
+                    className="flex-1 rounded-md border bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/40"
+                  />
+                  <button
+                    onClick={searchDrive}
+                    disabled={driveBusy}
+                    className="rounded-md border px-2 py-1.5 text-sm hover:bg-black/5 disabled:opacity-50 dark:hover:bg-white/5"
+                  >
+                    {driveBusy ? "…" : "Search"}
+                  </button>
+                </div>
+                {driveResults && (
+                  <div className="mt-1 space-y-1">
+                    {driveResults.length === 0 ? (
+                      <p className="text-xs opacity-40">
+                        No Drive results (or Google isn&apos;t connected).
+                      </p>
+                    ) : (
+                      driveResults.map((f) => (
+                        <button
+                          key={f.id}
+                          onClick={() => attachDrive(f)}
+                          className="block w-full truncate rounded-md px-2 py-1 text-left text-sm hover:bg-black/5 dark:hover:bg-white/5"
+                        >
+                          📄 {f.name}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Comments */}
             <div className="mt-6">
