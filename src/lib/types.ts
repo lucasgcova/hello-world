@@ -90,6 +90,17 @@ export interface Comment {
   author?: Profile | null;
 }
 
+export interface WorkspaceInvitation {
+  id: string;
+  workspace_id: string;
+  email: string;
+  role: MemberRole;
+  token: string;
+  invited_by: string | null;
+  accepted_at: string | null;
+  created_at: string;
+}
+
 export interface Integration {
   id: string;
   workspace_id: string;

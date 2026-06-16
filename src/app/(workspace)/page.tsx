@@ -1,16 +1,14 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { Project, Workspace } from "@/lib/types";
+import { getWorkspaces, resolveActiveWorkspace } from "@/lib/workspace";
+import type { Project } from "@/lib/types";
 
 // Home: send the user to their first project, or show an empty state.
 export default async function Home() {
   const supabase = await createClient();
 
-  const { data: workspaces } = await supabase
-    .from("workspaces")
-    .select("*")
-    .order("created_at", { ascending: true });
-  const ws = ((workspaces ?? []) as Workspace[])[0];
+  const workspaces = await getWorkspaces();
+  const ws = await resolveActiveWorkspace(workspaces);
   if (!ws) redirect("/onboarding");
 
   const { data: projects } = await supabase

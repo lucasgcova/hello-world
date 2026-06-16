@@ -3,22 +3,23 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import type { Project, Profile, WorkspaceMember, Workspace } from "@/lib/types";
+import type { Project, Profile, Workspace } from "@/lib/types";
 import { createProject } from "@/lib/actions/projects";
 import { AssistantPanel } from "@/components/AssistantPanel";
+import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 
 const EMOJI_CHOICES = ["📋", "🚀", "🛠️", "📈", "🎯", "🧪", "💡", "📦", "🐛", "🎨"];
 
 export function AppShell({
   workspace,
+  workspaces,
   projects,
-  members,
   profile,
   children,
 }: {
   workspace: Workspace;
+  workspaces: Workspace[];
   projects: Project[];
-  members: WorkspaceMember[];
   profile: Profile | null;
   children: React.ReactNode;
 }) {
@@ -53,13 +54,8 @@ export function AppShell({
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar */}
       <aside className="flex w-64 shrink-0 flex-col border-r bg-sidebar">
-        <div className="flex items-center justify-between px-4 py-3.5">
-          <div className="flex items-center gap-2 truncate">
-            <span className="text-lg">🗂️</span>
-            <span className="truncate text-sm font-semibold">
-              {workspace.name}
-            </span>
-          </div>
+        <div className="px-2 py-2.5">
+          <WorkspaceSwitcher current={workspace} workspaces={workspaces} />
         </div>
 
         <div className="flex items-center justify-between px-4 pb-1 pt-2">
@@ -98,6 +94,12 @@ export function AppShell({
         </nav>
 
         <div className="border-t p-2">
+          <Link
+            href="/settings/members"
+            className="mb-1 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm opacity-80 transition hover:bg-black/5 dark:hover:bg-white/5"
+          >
+            <span>👥</span> Members
+          </Link>
           <Link
             href="/settings/integrations"
             className="mb-1 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm opacity-80 transition hover:bg-black/5 dark:hover:bg-white/5"
