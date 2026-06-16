@@ -1,7 +1,13 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Board } from "@/components/Board";
-import type { Project, ProjectStatus, Task, WorkspaceMember } from "@/lib/types";
+import type {
+  Label,
+  Project,
+  ProjectStatus,
+  Task,
+  WorkspaceMember,
+} from "@/lib/types";
 
 export default async function ProjectPage({
   params,
@@ -19,7 +25,7 @@ export default async function ProjectPage({
   if (!project) notFound();
   const p = project as Project;
 
-  const [{ data: statuses }, { data: tasks }, { data: members }] =
+  const [{ data: statuses }, { data: tasks }, { data: members }, { data: labels }] =
     await Promise.all([
       supabase
         .from("project_statuses")
@@ -28,21 +34,35 @@ export default async function ProjectPage({
         .order("position", { ascending: true }),
       supabase
         .from("tasks")
-        .select("*, assignee:profiles(*)")
+        .select("*, assignee:profiles(*), task_labels(label:labels(*))")
         .eq("project_id", projectId)
         .order("position", { ascending: true }),
       supabase
         .from("workspace_members")
         .select("user_id, role, workspace_id, created_at, profile:profiles(*)")
         .eq("workspace_id", p.workspace_id),
+      supabase
+        .from("labels")
+        .select("*")
+        .eq("workspace_id", p.workspace_id)
+        .order("name", { ascending: true }),
     ]);
+
+  // Flatten nested task_labels → task.labels
+  const hydratedTasks = ((tasks ?? []) as unknown as (Task & {
+    task_labels?: { label: Label }[];
+  })[]).map((t) => ({
+    ...t,
+    labels: (t.task_labels ?? []).map((tl) => tl.label).filter(Boolean),
+  })) as Task[];
 
   return (
     <Board
       project={p}
       statuses={(statuses ?? []) as ProjectStatus[]}
-      tasks={(tasks ?? []) as unknown as Task[]}
+      tasks={hydratedTasks}
       members={(members ?? []) as unknown as WorkspaceMember[]}
+      labels={(labels ?? []) as Label[]}
     />
   );
 }

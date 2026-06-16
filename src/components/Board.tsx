@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   PRIORITY_META,
+  type Label,
   type Project,
   type ProjectStatus,
   type Task,
@@ -20,23 +21,42 @@ import {
 import { TaskDialog } from "@/components/TaskDialog";
 
 type View = "board" | "list" | "table";
+type SortKey = "manual" | "priority" | "due" | "created";
+
+interface Filters {
+  search: string;
+  assigneeId: string; // "" = all, "__none__" = unassigned
+  priority: string; // "" = all
+  labelId: string; // "" = all
+}
+
+const EMPTY_FILTERS: Filters = {
+  search: "",
+  assigneeId: "",
+  priority: "",
+  labelId: "",
+};
 
 export function Board({
   project,
   statuses,
   tasks: initialTasks,
   members,
+  labels,
 }: {
   project: Project;
   statuses: ProjectStatus[];
   tasks: Task[];
   members: WorkspaceMember[];
+  labels: Label[];
 }) {
   const router = useRouter();
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [view, setView] = useState<View>("board");
   const [selected, setSelected] = useState<Task | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [sort, setSort] = useState<SortKey>("manual");
 
   const assignees = useMemo(
     () => members.map((m) => m.profile).filter(Boolean) as Profile[],
@@ -44,15 +64,68 @@ export function Board({
   );
 
   const firstStatusId = statuses[0]?.id ?? null;
+  const filtersActive =
+    filters.search !== "" ||
+    filters.assigneeId !== "" ||
+    filters.priority !== "" ||
+    filters.labelId !== "";
+
+  const visible = useMemo(() => {
+    const match = (t: Task) => {
+      if (
+        filters.search &&
+        !t.title.toLowerCase().includes(filters.search.toLowerCase())
+      )
+        return false;
+      if (filters.assigneeId === "__none__" && t.assignee_id) return false;
+      if (
+        filters.assigneeId &&
+        filters.assigneeId !== "__none__" &&
+        t.assignee_id !== filters.assigneeId
+      )
+        return false;
+      if (filters.priority && t.priority !== filters.priority) return false;
+      if (
+        filters.labelId &&
+        !(t.labels ?? []).some((l) => l.id === filters.labelId)
+      )
+        return false;
+      return true;
+    };
+
+    const sorted = tasks.filter(match);
+    sorted.sort((a, b) => {
+      switch (sort) {
+        case "priority":
+          return PRIORITY_META[b.priority].rank - PRIORITY_META[a.priority].rank;
+        case "due":
+          return (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999");
+        case "created":
+          return b.created_at.localeCompare(a.created_at);
+        default:
+          return a.position - b.position;
+      }
+    });
+    return sorted;
+  }, [tasks, filters, sort]);
 
   function tasksFor(statusId: string) {
-    return tasks
-      .filter(
-        (t) =>
-          t.status_id === statusId ||
-          (t.status_id === null && statusId === firstStatusId),
-      )
-      .sort((a, b) => a.position - b.position);
+    return visible.filter(
+      (t) =>
+        t.status_id === statusId ||
+        (t.status_id === null && statusId === firstStatusId),
+    );
+  }
+
+  function nextPosFor(statusId: string) {
+    const inCol = tasks.filter(
+      (t) =>
+        t.status_id === statusId ||
+        (t.status_id === null && statusId === firstStatusId),
+    );
+    return (
+      Math.max(0, ...inCol.map((t) => t.position)) + 1000
+    );
   }
 
   function patchLocal(id: string, patch: Partial<Task>) {
@@ -63,9 +136,7 @@ export function Board({
     if (!dragId) return;
     const id = dragId;
     setDragId(null);
-    const colTasks = tasksFor(statusId);
-    const nextPos =
-      (colTasks[colTasks.length - 1]?.position ?? 0) + 1000;
+    const nextPos = nextPosFor(statusId);
     patchLocal(id, { status_id: statusId, position: nextPos });
     const res = await moveTask({
       id,
@@ -86,11 +157,12 @@ export function Board({
       priority: "none",
       assignee_id: null,
       due_date: null,
-      position: (tasksFor(statusId).slice(-1)[0]?.position ?? 0) + 1000,
+      position: nextPosFor(statusId),
       created_by: "",
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       completed_at: null,
+      labels: [],
     };
     setTasks((prev) => [...prev, temp]);
     const res = await createTask({ projectId: project.id, statusId, title });
@@ -120,6 +192,7 @@ export function Board({
       dueDate: updated.due_date,
       statusId: updated.status_id,
     });
+    router.refresh();
   }
 
   return (
@@ -154,6 +227,71 @@ export function Board({
         </div>
       </header>
 
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-2 border-b px-6 py-2 text-sm">
+        <input
+          value={filters.search}
+          onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+          placeholder="Search tasks…"
+          className="w-40 rounded-md border bg-background px-2.5 py-1 text-sm outline-none focus:ring-2 focus:ring-indigo-500/40"
+        />
+        <Select
+          value={filters.assigneeId}
+          onChange={(v) => setFilters({ ...filters, assigneeId: v })}
+        >
+          <option value="">Anyone</option>
+          <option value="__none__">Unassigned</option>
+          {assignees.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.full_name || a.email}
+            </option>
+          ))}
+        </Select>
+        <Select
+          value={filters.priority}
+          onChange={(v) => setFilters({ ...filters, priority: v })}
+        >
+          <option value="">Any priority</option>
+          {(["urgent", "high", "medium", "low", "none"] as TaskPriority[]).map(
+            (p) => (
+              <option key={p} value={p}>
+                {PRIORITY_META[p].label}
+              </option>
+            ),
+          )}
+        </Select>
+        {labels.length > 0 && (
+          <Select
+            value={filters.labelId}
+            onChange={(v) => setFilters({ ...filters, labelId: v })}
+          >
+            <option value="">Any label</option>
+            {labels.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </Select>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          {filtersActive && (
+            <button
+              onClick={() => setFilters(EMPTY_FILTERS)}
+              className="text-xs opacity-60 hover:opacity-100"
+            >
+              Clear
+            </button>
+          )}
+          <span className="text-xs opacity-40">Sort</span>
+          <Select value={sort} onChange={(v) => setSort(v as SortKey)}>
+            <option value="manual">Manual</option>
+            <option value="priority">Priority</option>
+            <option value="due">Due date</option>
+            <option value="created">Newest</option>
+          </Select>
+        </div>
+      </div>
+
       <div className="min-h-0 flex-1 overflow-auto">
         {view === "board" && (
           <BoardView
@@ -167,18 +305,10 @@ export function Board({
           />
         )}
         {view === "list" && (
-          <ListView
-            statuses={statuses}
-            tasksFor={tasksFor}
-            onOpen={setSelected}
-          />
+          <ListView statuses={statuses} tasksFor={tasksFor} onOpen={setSelected} />
         )}
         {view === "table" && (
-          <TableView
-            tasks={tasks}
-            statuses={statuses}
-            onOpen={setSelected}
-          />
+          <TableView tasks={visible} statuses={statuses} onOpen={setSelected} />
         )}
       </div>
 
@@ -187,7 +317,9 @@ export function Board({
           task={selected}
           statuses={statuses}
           assignees={assignees}
+          labels={labels}
           projectId={project.id}
+          workspaceId={project.workspace_id}
           onClose={() => setSelected(null)}
           onSaved={onSaved}
           onDeleted={onDeleted}
@@ -356,6 +488,13 @@ function TaskCard({
         dragging ? "opacity-40" : ""
       }`}
     >
+      {task.labels && task.labels.length > 0 && (
+        <div className="mb-1.5 flex flex-wrap gap-1">
+          {task.labels.slice(0, 3).map((l) => (
+            <LabelChip key={l.id} label={l} />
+          ))}
+        </div>
+      )}
       <div className="mb-1.5 leading-snug">{task.title}</div>
       <div className="flex items-center gap-2">
         {task.priority !== "none" && <PriorityBadge priority={task.priority} />}
@@ -408,6 +547,9 @@ function ListView({
                 >
                   {t.priority !== "none" && <PriorityBadge priority={t.priority} />}
                   <span className="flex-1 truncate">{t.title}</span>
+                  {(t.labels ?? []).slice(0, 2).map((l) => (
+                    <LabelChip key={l.id} label={l} />
+                  ))}
                   {t.due_date && (
                     <span className="text-xs opacity-50">
                       {formatDate(t.due_date)}
@@ -493,6 +635,37 @@ function TableView({
 // ---------------------------------------------------------------------------
 // Shared bits
 // ---------------------------------------------------------------------------
+function Select({
+  value,
+  onChange,
+  children,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="rounded-md border bg-background px-2 py-1 text-sm outline-none"
+    >
+      {children}
+    </select>
+  );
+}
+
+function LabelChip({ label }: { label: Label }) {
+  return (
+    <span
+      className="rounded px-1.5 py-0.5 text-[11px] font-medium"
+      style={{ background: `${label.color}22`, color: label.color }}
+    >
+      {label.name}
+    </span>
+  );
+}
+
 function PriorityBadge({ priority }: { priority: TaskPriority }) {
   const meta = PRIORITY_META[priority];
   return (
