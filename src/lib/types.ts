@@ -81,6 +81,25 @@ export interface Task {
   labels?: Label[];
 }
 
+export interface ProjectView {
+  id: string;
+  project_id: string;
+  name: string;
+  config: {
+    view?: "board" | "list" | "table";
+    filters?: {
+      search?: string;
+      assigneeId?: string;
+      priority?: string;
+      labelId?: string;
+    };
+    sort?: "manual" | "priority" | "due" | "created";
+  };
+  position: number;
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface TaskAttachment {
   id: string;
   task_id: string;

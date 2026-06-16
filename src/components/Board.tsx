@@ -8,6 +8,7 @@ import {
   type Label,
   type Project,
   type ProjectStatus,
+  type ProjectView,
   type Task,
   type TaskPriority,
   type WorkspaceMember,
@@ -19,6 +20,7 @@ import {
   moveTask,
   deleteTask,
 } from "@/lib/actions/tasks";
+import { createView, deleteView } from "@/lib/actions/views";
 import { TaskDialog } from "@/components/TaskDialog";
 
 type View = "board" | "list" | "table";
@@ -45,12 +47,14 @@ export function Board({
   tasks: initialTasks,
   members,
   labels,
+  views,
 }: {
   project: Project;
   statuses: ProjectStatus[];
   tasks: Task[];
   members: WorkspaceMember[];
   labels: Label[];
+  views: ProjectView[];
 }) {
   const router = useRouter();
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
@@ -62,6 +66,70 @@ export function Board({
   const [drop, setDrop] = useState<DropTarget>(null);
   const dropRef = useRef<DropTarget>(null);
   dropRef.current = drop;
+  const [savedViews, setSavedViews] = useState<ProjectView[]>(views);
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const [savingView, setSavingView] = useState(false);
+  const [viewName, setViewName] = useState("");
+
+  function applyView(v: ProjectView) {
+    setView(v.config.view ?? "board");
+    setFilters({
+      search: v.config.filters?.search ?? "",
+      assigneeId: v.config.filters?.assigneeId ?? "",
+      priority: v.config.filters?.priority ?? "",
+      labelId: v.config.filters?.labelId ?? "",
+    });
+    setSort(v.config.sort ?? "manual");
+    setActiveViewId(v.id);
+    try {
+      localStorage.setItem(`ts_view_${project.id}`, v.id);
+    } catch {}
+  }
+
+  function resetView() {
+    setView("board");
+    setFilters(EMPTY_FILTERS);
+    setSort("manual");
+    setActiveViewId(null);
+    try {
+      localStorage.removeItem(`ts_view_${project.id}`);
+    } catch {}
+  }
+
+  async function saveCurrentView() {
+    const name = viewName.trim();
+    if (!name) return;
+    setViewName("");
+    setSavingView(false);
+    const res = await createView({
+      projectId: project.id,
+      name,
+      config: { view, filters, sort },
+    });
+    if (res.view) {
+      setSavedViews((prev) => [...prev, res.view!]);
+      setActiveViewId(res.view.id);
+      try {
+        localStorage.setItem(`ts_view_${project.id}`, res.view.id);
+      } catch {}
+    }
+  }
+
+  async function removeView(id: string) {
+    setSavedViews((prev) => prev.filter((v) => v.id !== id));
+    if (activeViewId === id) resetView();
+    await deleteView({ id, projectId: project.id });
+  }
+
+  // Per-user default: restore the last view used for this project.
+  useEffect(() => {
+    try {
+      const id = localStorage.getItem(`ts_view_${project.id}`);
+      const v = id ? views.find((x) => x.id === id) : null;
+      if (v) applyView(v);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id]);
 
   const assignees = useMemo(
     () => members.map((m) => m.profile).filter(Boolean) as Profile[],
@@ -286,6 +354,80 @@ export function Board({
           </div>
         </div>
       </header>
+
+      {/* Saved views */}
+      <div className="flex flex-wrap items-center gap-1.5 border-b px-6 py-2 text-sm">
+        <button
+          onClick={resetView}
+          className={`rounded-md px-2 py-0.5 transition ${
+            activeViewId === null
+              ? "bg-black/5 font-medium dark:bg-white/10"
+              : "opacity-60 hover:opacity-100"
+          }`}
+        >
+          All
+        </button>
+        {savedViews.map((v) => (
+          <span key={v.id} className="inline-flex items-center">
+            <button
+              onClick={() => applyView(v)}
+              className={`rounded-md px-2 py-0.5 transition ${
+                activeViewId === v.id
+                  ? "bg-black/5 font-medium dark:bg-white/10"
+                  : "opacity-60 hover:opacity-100"
+              }`}
+            >
+              {v.name}
+            </button>
+            {activeViewId === v.id && (
+              <button
+                onClick={() => removeView(v.id)}
+                className="ml-0.5 text-xs opacity-40 hover:text-red-500"
+                title="Delete view"
+              >
+                ×
+              </button>
+            )}
+          </span>
+        ))}
+        {savingView ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveCurrentView();
+            }}
+            className="inline-flex items-center gap-1"
+          >
+            <input
+              autoFocus
+              value={viewName}
+              onChange={(e) => setViewName(e.target.value)}
+              placeholder="View name"
+              className="w-28 rounded-md border bg-background px-2 py-0.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/40"
+            />
+            <button
+              type="submit"
+              className="rounded-md bg-indigo-600 px-2 py-0.5 text-xs font-medium text-white"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => setSavingView(false)}
+              className="text-xs opacity-50"
+            >
+              cancel
+            </button>
+          </form>
+        ) : (
+          <button
+            onClick={() => setSavingView(true)}
+            className="rounded-md px-2 py-0.5 text-xs opacity-50 transition hover:opacity-100"
+          >
+            + Save view
+          </button>
+        )}
+      </div>
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2 border-b px-6 py-2 text-sm">

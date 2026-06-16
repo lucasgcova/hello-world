@@ -5,6 +5,7 @@ import type {
   Label,
   Project,
   ProjectStatus,
+  ProjectView,
   Task,
   WorkspaceMember,
 } from "@/lib/types";
@@ -25,28 +26,38 @@ export default async function ProjectPage({
   if (!project) notFound();
   const p = project as Project;
 
-  const [{ data: statuses }, { data: tasks }, { data: members }, { data: labels }] =
-    await Promise.all([
-      supabase
-        .from("project_statuses")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("position", { ascending: true }),
-      supabase
-        .from("tasks")
-        .select("*, assignee:profiles(*), task_labels(label:labels(*))")
-        .eq("project_id", projectId)
-        .order("position", { ascending: true }),
-      supabase
-        .from("workspace_members")
-        .select("user_id, role, workspace_id, created_at, profile:profiles(*)")
-        .eq("workspace_id", p.workspace_id),
-      supabase
-        .from("labels")
-        .select("*")
-        .eq("workspace_id", p.workspace_id)
-        .order("name", { ascending: true }),
-    ]);
+  const [
+    { data: statuses },
+    { data: tasks },
+    { data: members },
+    { data: labels },
+    { data: views },
+  ] = await Promise.all([
+    supabase
+      .from("project_statuses")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("position", { ascending: true }),
+    supabase
+      .from("tasks")
+      .select("*, assignee:profiles(*), task_labels(label:labels(*))")
+      .eq("project_id", projectId)
+      .order("position", { ascending: true }),
+    supabase
+      .from("workspace_members")
+      .select("user_id, role, workspace_id, created_at, profile:profiles(*)")
+      .eq("workspace_id", p.workspace_id),
+    supabase
+      .from("labels")
+      .select("*")
+      .eq("workspace_id", p.workspace_id)
+      .order("name", { ascending: true }),
+    supabase
+      .from("project_views")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: true }),
+  ]);
 
   // Flatten nested task_labels → task.labels
   const hydratedTasks = ((tasks ?? []) as unknown as (Task & {
@@ -63,6 +74,7 @@ export default async function ProjectPage({
       tasks={hydratedTasks}
       members={(members ?? []) as unknown as WorkspaceMember[]}
       labels={(labels ?? []) as Label[]}
+      views={(views ?? []) as ProjectView[]}
     />
   );
 }
