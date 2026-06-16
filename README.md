@@ -3,30 +3,36 @@
 A Notion-style project-management app for small teams, connected to **Gmail**,
 **Google Drive**, **Slack**, and **Claude** (via the Anthropic API).
 
-This is the **first milestone** of a larger build. It ships a real, runnable
-foundation focused on the project-management core, with the AI assistant and an
-extensible integrations layer wired in.
+A real, runnable build covering the project-management core, docs, team
+collaboration, AI, and external integrations.
 
-## What's in this milestone
+## Features
 
 - ✅ **Auth** — Google sign-in + email magic links (Supabase Auth)
-- ✅ **Workspaces & members** — one workspace per team, role-based access
+- ✅ **Workspaces & members** — multi-workspace switching, role-based access
+- ✅ **Team invitations** — invite by email with shareable links; manage members
 - ✅ **Projects & boards** — Kanban (drag & drop), List, and Table views
-- ✅ **Tasks** — status, priority, assignee, due date, description, comments
-- ✅ **Claude AI assistant** — streaming chat that can create tasks, summarize
-  the board, and move work, using tool-calling against your data
-- ✅ **Integrations layer** — adapter interfaces for all four services;
-  **Slack** wired for real (notifications), **Gmail/Drive** as drop-in stubs
+- ✅ **Tasks** — status, priority, assignee, due date, description, comments,
+  labels
+- ✅ **Filtering & sorting** — by search, assignee, priority, label; sort by
+  priority / due date / newest
+- ✅ **Docs / wiki** — Notion-style nested pages with a block editor
+  (headings, lists, to-dos, quotes, code, dividers, slash commands)
+- ✅ **Realtime** — boards and comments update live across the team
+- ✅ **Claude AI assistant** — streaming chat with tool-calling: create tasks,
+  summarize the board, move work, and search Drive/Gmail
+- ✅ **Integrations** — Slack notifications (real), Google Gmail + Drive via
+  OAuth (real), Claude (real); clean adapter layer for adding more
 - ✅ **Row Level Security** — every table is protected; users only see their
   workspaces
 
-### Intentionally not in this milestone (next up)
+### Roadmap / ideas
 
-- Rich block editor / nested wiki pages (Notion docs)
-- Real Gmail/Drive OAuth (adapters + stubs are in place to fill in)
-- Team invitations UI, multi-workspace switching
-- Labels UI, filtering/sorting, saved views
-- Realtime multiplayer updates
+- Inline task reordering within a column (drag to position)
+- Saved/filtered views and per-user defaults
+- Page ↔ task links and @mentions
+- Slack slash-command + event subscriptions (two-way)
+- Gmail "send" actions and Drive file attachments on tasks
 
 ## Tech stack
 
@@ -57,9 +63,12 @@ the Supabase CLI:
 supabase link --project-ref YOUR_PROJECT_REF
 supabase db push   # applies supabase/migrations/*.sql
 
-# Option B — copy/paste supabase/migrations/0001_schema.sql then 0002_rls.sql
-# into the Supabase SQL Editor and run them in order.
+# Option B — paste each file in supabase/migrations/ (0001 … 0006) into the
+# Supabase SQL Editor and run them in order.
 ```
+
+Then enable Realtime: the migrations add the relevant tables to the
+`supabase_realtime` publication automatically.
 
 ### 3. Enable Google sign-in (for "Continue with Google")
 
@@ -82,6 +91,18 @@ Create one at [console.anthropic.com](https://console.anthropic.com) → API Key
 
 Create an [incoming webhook](https://api.slack.com/messaging/webhooks) and copy
 the URL into `SLACK_WEBHOOK_URL`. New tasks will post to that channel.
+
+### 5b. (Optional) Connect Gmail + Drive
+
+1. In the [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+   create an **OAuth client (Web application)**.
+2. Add the redirect URI `${NEXT_PUBLIC_SITE_URL}/api/integrations/google/callback`
+   (e.g. `http://localhost:3000/api/integrations/google/callback`).
+3. Enable the **Gmail API** and **Drive API** for the project.
+4. Put the client id/secret in `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
+5. Set `SUPABASE_SERVICE_ROLE_KEY` (the assistant reads Google tokens
+   server-side with it; tokens are never exposed to the browser).
+6. In the app, go to **Settings → Integrations → Connect** (workspace admins).
 
 ### 6. Environment variables
 
@@ -145,17 +166,16 @@ for lower cost/latency. Tool definitions and the system prompt live in
 
 ## How integrations are structured
 
-Every integration implements one interface (`src/lib/integrations/types.ts`) and
-registers in `src/lib/integrations/registry.ts`. Slack is fully implemented;
-Gmail and Drive are stubs with the same shape, so wiring them later is a
-localized change:
-
-1. Create a Google Cloud OAuth app (Gmail + Drive scopes).
-2. Implement the method bodies in `gmail.ts` / `gdrive.ts` using the `googleapis`
-   client and per-workspace tokens stored in the `integrations` table.
-
-`notifyAll()` fans out a notification through every configured adapter and never
-throws, so a failing integration can't break the action that triggered it.
+- **Slack** — notification adapter (`src/lib/integrations/slack.ts`) registered
+  in the registry. `notifyAll()` fans out through every configured adapter and
+  never throws, so a failing integration can't break the action that triggered
+  it. New tasks post to Slack.
+- **Google (Gmail + Drive)** — real OAuth in `src/lib/integrations/google.ts`.
+  One per-workspace connection grants both. Tokens live in the admin-only
+  `google_connections` table and are read/refreshed server-side with the service
+  role; the AI assistant calls `search_drive` / `search_email` tools.
+- **Adding a new notifier** — implement the `IntegrationAdapter` interface and
+  register it in `registry.ts`; it's picked up everywhere automatically.
 
 ## Deploying to Vercel
 

@@ -1,6 +1,12 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { notifyAll } from "@/lib/integrations/registry";
+import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  getValidAccessToken,
+  driveSearch,
+  gmailSearch,
+} from "@/lib/integrations/google";
 import type { TaskPriority } from "@/lib/types";
 
 export interface ToolContext {
@@ -75,7 +81,33 @@ export const AI_TOOLS: Anthropic.Tool[] = [
       required: ["task", "status_name"],
     },
   },
+  {
+    name: "search_drive",
+    description:
+      "Search the team's connected Google Drive for files by name. Call this when the user asks to find a doc, spreadsheet, or file, or references something likely stored in Drive.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search terms (file name)." },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "search_email",
+    description:
+      "Search the connected Gmail account. Call this when the user asks about recent emails or wants context from email threads. Uses Gmail search syntax (e.g. 'from:alice newer_than:7d').",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Gmail search query." },
+      },
+      required: ["query"],
+    },
+  },
 ];
+
+const TASK_TOOLS = new Set(["create_task", "list_tasks", "update_task_status"]);
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -107,7 +139,7 @@ export async function executeTool(
   input: Record<string, unknown>,
   ctx: ToolContext,
 ): Promise<string> {
-  if (!ctx.projectId) {
+  if (TASK_TOOLS.has(name) && !ctx.projectId) {
     return "No project is currently open. Ask the user to open a project first.";
   }
 
@@ -211,6 +243,31 @@ export async function executeTool(
         if (error) return `Failed to update task: ${error.message}`;
 
         return `Moved task to "${status.name}".`;
+      }
+
+      case "search_drive":
+      case "search_email": {
+        const admin = createAdminClient();
+        if (!admin) {
+          return "Google search isn't available — the server is missing SUPABASE_SERVICE_ROLE_KEY.";
+        }
+        const token = await getValidAccessToken(admin, ctx.workspaceId);
+        if (!token) {
+          return "Google isn't connected for this workspace. Connect it in Settings → Integrations.";
+        }
+        const query = String(input.query ?? "");
+
+        if (name === "search_drive") {
+          const files = await driveSearch(token, query);
+          if (files.length === 0) return "No matching Drive files.";
+          return files.map((f) => `- ${f.name} — ${f.link}`).join("\n");
+        }
+
+        const emails = await gmailSearch(token, query);
+        if (emails.length === 0) return "No matching emails.";
+        return emails
+          .map((e) => `- ${e.subject} (from ${e.from})\n  ${e.snippet}`)
+          .join("\n");
       }
 
       default:
