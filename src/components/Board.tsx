@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import {
   PRIORITY_META,
   type Label,
@@ -62,6 +63,28 @@ export function Board({
     () => members.map((m) => m.profile).filter(Boolean) as Profile[],
     [members],
   );
+
+  // Re-sync local state whenever the server data meaningfully changes
+  // (e.g. after a realtime-triggered refresh).
+  const initialKey = useMemo(
+    () =>
+      initialTasks
+        .map(
+          (t) =>
+            `${t.id}:${t.updated_at}:${t.position}:${t.status_id}:${(t.labels ?? [])
+              .map((l) => l.id)
+              .join("+")}`,
+        )
+        .join("|"),
+    [initialTasks],
+  );
+  useEffect(() => {
+    setTasks(initialTasks);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialKey]);
+
+  // Live updates from teammates.
+  useRealtimeRefresh(project.id, () => router.refresh());
 
   const firstStatusId = statuses[0]?.id ?? null;
   const filtersActive =

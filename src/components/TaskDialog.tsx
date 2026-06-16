@@ -85,6 +85,34 @@ export function TaskDialog({
     };
   }, [task.id, isTemp, supabase]);
 
+  // Live comments from teammates.
+  useEffect(() => {
+    if (isTemp) return;
+    const channel = supabase
+      .channel(`comments-${task.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "comments",
+          filter: `task_id=eq.${task.id}`,
+        },
+        async () => {
+          const { data } = await supabase
+            .from("comments")
+            .select("*, author:profiles(*)")
+            .eq("task_id", task.id)
+            .order("created_at", { ascending: true });
+          setComments((data ?? []) as unknown as Comment[]);
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [task.id, isTemp, supabase]);
+
   function toggleLabel(id: string) {
     setSelectedLabelIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
