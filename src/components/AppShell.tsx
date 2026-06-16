@@ -8,6 +8,7 @@ import { createProject } from "@/lib/actions/projects";
 import { createPage } from "@/lib/actions/pages";
 import { AssistantPanel } from "@/components/AssistantPanel";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
+import { NotificationBell } from "@/components/NotificationBell";
 
 const EMOJI_CHOICES = ["📋", "🚀", "🛠️", "📈", "🎯", "🧪", "💡", "📦", "🐛", "🎨"];
 
@@ -176,15 +177,18 @@ export function AppShell({
                 {profile?.full_name || profile?.email}
               </span>
             </div>
-            <form action="/auth/signout" method="post">
-              <button
-                type="submit"
-                className="text-xs opacity-50 transition hover:opacity-100"
-                title="Sign out"
-              >
-                Sign out
-              </button>
-            </form>
+            <div className="flex items-center gap-1">
+              {profile?.id && <NotificationBell currentUserId={profile.id} />}
+              <form action="/auth/signout" method="post">
+                <button
+                  type="submit"
+                  className="text-xs opacity-50 transition hover:opacity-100"
+                  title="Sign out"
+                >
+                  Sign out
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       </aside>

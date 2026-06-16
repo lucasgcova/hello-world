@@ -90,6 +90,18 @@ export interface Comment {
   author?: Profile | null;
 }
 
+export interface Notification {
+  id: string;
+  user_id: string;
+  workspace_id: string;
+  actor_id: string | null;
+  type: string;
+  body: string;
+  link: string | null;
+  read: boolean;
+  created_at: string;
+}
+
 export interface WorkspaceInvitation {
   id: string;
   workspace_id: string;

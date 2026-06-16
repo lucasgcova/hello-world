@@ -60,6 +60,8 @@ export function TaskDialog({
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentBody, setCommentBody] = useState("");
   const [loadingComments, setLoadingComments] = useState(true);
+  const [mentioned, setMentioned] = useState<Record<string, string>>({});
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 
   const isTemp = task.id.startsWith("temp-");
 
@@ -158,11 +160,28 @@ export function TaskDialog({
     });
   }
 
+  function onCommentChange(value: string) {
+    setCommentBody(value);
+    const m = value.match(/@([^\s@]*)$/);
+    setMentionQuery(m ? m[1] : null);
+  }
+
+  function pickMention(p: Profile) {
+    const name = p.full_name || p.email || "user";
+    setCommentBody((prev) => prev.replace(/@([^\s@]*)$/, `@${name} `));
+    setMentioned((prev) => ({ ...prev, [p.id]: name }));
+    setMentionQuery(null);
+  }
+
   async function postComment() {
     if (!commentBody.trim() || isTemp) return;
     const body = commentBody.trim();
+    const mentionedUserIds = Object.entries(mentioned)
+      .filter(([, name]) => body.includes(`@${name}`))
+      .map(([id]) => id);
     setCommentBody("");
-    await addComment({ taskId: task.id, projectId, body });
+    setMentionQuery(null);
+    await addComment({ taskId: task.id, projectId, body, mentionedUserIds });
     const { data } = await supabase
       .from("comments")
       .select("*, author:profiles(*)")
@@ -241,25 +260,52 @@ export function TaskDialog({
               )}
 
               {!isTemp && (
-                <div className="mt-3 flex gap-2">
-                  <input
-                    value={commentBody}
-                    onChange={(e) => setCommentBody(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        postComment();
-                      }
-                    }}
-                    placeholder="Write a comment…"
-                    className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/40"
-                  />
-                  <button
-                    onClick={postComment}
-                    className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-                  >
-                    Send
-                  </button>
+                <div className="relative mt-3">
+                  {mentionQuery !== null && assignees.length > 0 && (
+                    <div className="absolute bottom-full left-0 z-10 mb-1 max-h-44 w-56 overflow-y-auto rounded-lg border bg-background p-1 shadow-lg">
+                      {assignees
+                        .filter((a) =>
+                          (a.full_name || a.email || "")
+                            .toLowerCase()
+                            .includes(mentionQuery.toLowerCase()),
+                        )
+                        .slice(0, 6)
+                        .map((a) => (
+                          <button
+                            key={a.id}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              pickMention(a);
+                            }}
+                            className="block w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-black/5 dark:hover:bg-white/5"
+                          >
+                            {a.full_name || a.email}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      value={commentBody}
+                      onChange={(e) => onCommentChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && mentionQuery === null) {
+                          e.preventDefault();
+                          postComment();
+                        } else if (e.key === "Escape") {
+                          setMentionQuery(null);
+                        }
+                      }}
+                      placeholder="Write a comment…  (@ to mention)"
+                      className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/40"
+                    />
+                    <button
+                      onClick={postComment}
+                      className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                    >
+                      Send
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
