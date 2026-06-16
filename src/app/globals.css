@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7f7f5;
+  --foreground: #1f2328;
+  --sidebar: #fbfbfa;
+  --border: #e6e6e3;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-sidebar: var(--sidebar);
+  --color-border: var(--border);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #191919;
+    --foreground: #e9e9e7;
+    --sidebar: #202020;
+    --border: #2f2f2f;
+  }
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  border-color: var(--border);
+}
+
+/* Thin, unobtrusive scrollbars for the board columns. */
+.scrollbar-thin::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--foreground) 18%, transparent);
+  border-radius: 9999px;
+}
