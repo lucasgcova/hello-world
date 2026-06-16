@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import {
@@ -23,6 +23,7 @@ import { TaskDialog } from "@/components/TaskDialog";
 
 type View = "board" | "list" | "table";
 type SortKey = "manual" | "priority" | "due" | "created";
+type DropTarget = { statusId: string; beforeId: string | null } | null;
 
 interface Filters {
   search: string;
@@ -58,6 +59,9 @@ export function Board({
   const [dragId, setDragId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [sort, setSort] = useState<SortKey>("manual");
+  const [drop, setDrop] = useState<DropTarget>(null);
+  const dropRef = useRef<DropTarget>(null);
+  dropRef.current = drop;
 
   const assignees = useMemo(
     () => members.map((m) => m.profile).filter(Boolean) as Profile[],
@@ -155,17 +159,50 @@ export function Board({
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }
 
+  function columnTasksFull(statusId: string) {
+    return tasks
+      .filter(
+        (t) =>
+          t.status_id === statusId ||
+          (t.status_id === null && statusId === firstStatusId),
+      )
+      .sort((a, b) => a.position - b.position);
+  }
+
+  // Position to give a task dropped before `beforeId` (null = end of column).
+  function computeReorderPos(
+    id: string,
+    statusId: string,
+    beforeId: string | null,
+  ) {
+    const col = columnTasksFull(statusId).filter((t) => t.id !== id);
+    if (beforeId === null) {
+      return (col.length ? col[col.length - 1].position : 0) + 1000;
+    }
+    const idx = col.findIndex((t) => t.id === beforeId);
+    if (idx < 0) return (col.length ? col[col.length - 1].position : 0) + 1000;
+    if (idx === 0) return col[0].position - 1000;
+    return (col[idx - 1].position + col[idx].position) / 2;
+  }
+
   async function handleDrop(statusId: string) {
     if (!dragId) return;
     const id = dragId;
+    const info = dropRef.current;
     setDragId(null);
-    const nextPos = nextPosFor(statusId);
-    patchLocal(id, { status_id: statusId, position: nextPos });
+    setDrop(null);
+
+    const newPos =
+      sort === "manual" && info && info.statusId === statusId
+        ? computeReorderPos(id, statusId, info.beforeId)
+        : nextPosFor(statusId);
+
+    patchLocal(id, { status_id: statusId, position: newPos });
     const res = await moveTask({
       id,
       projectId: project.id,
       statusId,
-      position: nextPos,
+      position: newPos,
     });
     if (res.error) router.refresh();
   }
@@ -325,6 +362,9 @@ export function Board({
             dragId={dragId}
             setDragId={setDragId}
             onDrop={handleDrop}
+            drop={drop}
+            setDrop={setDrop}
+            reorderEnabled={sort === "manual"}
           />
         )}
         {view === "list" && (
@@ -363,6 +403,9 @@ function BoardView({
   dragId,
   setDragId,
   onDrop,
+  drop,
+  setDrop,
+  reorderEnabled,
 }: {
   statuses: ProjectStatus[];
   tasksFor: (statusId: string) => Task[];
@@ -371,6 +414,9 @@ function BoardView({
   dragId: string | null;
   setDragId: (id: string | null) => void;
   onDrop: (statusId: string) => void;
+  drop: DropTarget;
+  setDrop: (d: DropTarget) => void;
+  reorderEnabled: boolean;
 }) {
   return (
     <div className="scrollbar-thin flex h-full gap-3 overflow-x-auto p-4">
@@ -384,6 +430,9 @@ function BoardView({
           dragId={dragId}
           setDragId={setDragId}
           onDrop={onDrop}
+          drop={drop}
+          setDrop={setDrop}
+          reorderEnabled={reorderEnabled}
         />
       ))}
     </div>
@@ -398,6 +447,9 @@ function Column({
   dragId,
   setDragId,
   onDrop,
+  drop,
+  setDrop,
+  reorderEnabled,
 }: {
   status: ProjectStatus;
   tasks: Task[];
@@ -406,6 +458,9 @@ function Column({
   dragId: string | null;
   setDragId: (id: string | null) => void;
   onDrop: (statusId: string) => void;
+  drop: DropTarget;
+  setDrop: (d: DropTarget) => void;
+  reorderEnabled: boolean;
 }) {
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
@@ -417,11 +472,19 @@ function Column({
     setAdding(false);
   }
 
+  const lineHere = (beforeId: string | null) =>
+    reorderEnabled &&
+    dragId !== null &&
+    drop?.statusId === status.id &&
+    drop?.beforeId === beforeId;
+
   return (
     <div
       onDragOver={(e) => {
         e.preventDefault();
         setOver(true);
+        // Pointer over the column but not a specific card → drop at end.
+        if (reorderEnabled) setDrop({ statusId: status.id, beforeId: null });
       }}
       onDragLeave={() => setOver(false)}
       onDrop={() => {
@@ -444,16 +507,35 @@ function Column({
       </div>
 
       <div className="scrollbar-thin flex-1 space-y-2 overflow-y-auto px-2 pb-2">
-        {tasks.map((t) => (
-          <TaskCard
+        {tasks.map((t, i) => (
+          <div
             key={t.id}
-            task={t}
-            onOpen={onOpen}
-            dragging={dragId === t.id}
-            onDragStart={() => setDragId(t.id)}
-            onDragEnd={() => setDragId(null)}
-          />
+            onDragOver={(e) => {
+              if (!reorderEnabled) return;
+              e.preventDefault();
+              e.stopPropagation();
+              const r = e.currentTarget.getBoundingClientRect();
+              const after = e.clientY > r.top + r.height / 2;
+              setDrop({
+                statusId: status.id,
+                beforeId: after ? (tasks[i + 1]?.id ?? null) : t.id,
+              });
+            }}
+          >
+            {lineHere(t.id) && <DropLine />}
+            <TaskCard
+              task={t}
+              onOpen={onOpen}
+              dragging={dragId === t.id}
+              onDragStart={() => setDragId(t.id)}
+              onDragEnd={() => {
+                setDragId(null);
+                setDrop(null);
+              }}
+            />
+          </div>
         ))}
+        {lineHere(null) && <DropLine />}
 
         {adding ? (
           <textarea
@@ -676,6 +758,10 @@ function Select({
       {children}
     </select>
   );
+}
+
+function DropLine() {
+  return <div className="my-1 h-0.5 rounded-full bg-indigo-500" />;
 }
 
 function LabelChip({ label }: { label: Label }) {
