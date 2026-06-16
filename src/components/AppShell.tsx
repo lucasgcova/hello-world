@@ -3,8 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import type { Project, Profile, Workspace } from "@/lib/types";
+import type { Page, Project, Profile, Workspace } from "@/lib/types";
 import { createProject } from "@/lib/actions/projects";
+import { createPage } from "@/lib/actions/pages";
 import { AssistantPanel } from "@/components/AssistantPanel";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 
@@ -14,12 +15,14 @@ export function AppShell({
   workspace,
   workspaces,
   projects,
+  pages,
   profile,
   children,
 }: {
   workspace: Workspace;
   workspaces: Workspace[];
   projects: Project[];
+  pages: Page[];
   profile: Profile | null;
   children: React.ReactNode;
 }) {
@@ -34,6 +37,43 @@ export function AppShell({
   const currentProjectId = pathname.startsWith("/projects/")
     ? pathname.split("/")[2]
     : null;
+  const currentPageId = pathname.startsWith("/pages/")
+    ? pathname.split("/")[2]
+    : null;
+
+  async function newPage() {
+    const res = await createPage({ workspaceId: workspace.id });
+    if (res.id) {
+      router.push(`/pages/${res.id}`);
+      router.refresh();
+    }
+  }
+
+  const childrenByParent = pages.reduce<Record<string, Page[]>>((acc, p) => {
+    const key = p.parent_id ?? "root";
+    (acc[key] ??= []).push(p);
+    return acc;
+  }, {});
+
+  function renderPageNodes(parentKey: string, depth: number): React.ReactNode {
+    return (childrenByParent[parentKey] ?? []).map((p) => (
+      <div key={p.id}>
+        <Link
+          href={`/pages/${p.id}`}
+          style={{ paddingLeft: `${8 + depth * 12}px` }}
+          className={`mb-0.5 flex items-center gap-2 rounded-md py-1.5 pr-2 text-sm transition ${
+            currentPageId === p.id
+              ? "bg-black/5 font-medium dark:bg-white/10"
+              : "hover:bg-black/5 dark:hover:bg-white/5"
+          }`}
+        >
+          <span>{p.icon}</span>
+          <span className="truncate">{p.title}</span>
+        </Link>
+        {renderPageNodes(p.id, depth + 1)}
+      </div>
+    ));
+  }
 
   async function submitProject(e: React.FormEvent) {
     e.preventDefault();
@@ -58,23 +98,23 @@ export function AppShell({
           <WorkspaceSwitcher current={workspace} workspaces={workspaces} />
         </div>
 
-        <div className="flex items-center justify-between px-4 pb-1 pt-2">
-          <span className="text-xs font-medium uppercase tracking-wide opacity-40">
-            Projects
-          </span>
-          <button
-            onClick={() => setShowNewProject(true)}
-            className="rounded px-1.5 text-lg leading-none opacity-50 transition hover:opacity-100"
-            aria-label="New project"
-            title="New project"
-          >
-            +
-          </button>
-        </div>
-
         <nav className="flex-1 overflow-y-auto px-2 pb-2">
+          {/* Projects */}
+          <div className="flex items-center justify-between px-2 pb-1 pt-2">
+            <span className="text-xs font-medium uppercase tracking-wide opacity-40">
+              Projects
+            </span>
+            <button
+              onClick={() => setShowNewProject(true)}
+              className="rounded px-1.5 text-lg leading-none opacity-50 transition hover:opacity-100"
+              aria-label="New project"
+              title="New project"
+            >
+              +
+            </button>
+          </div>
           {projects.length === 0 && (
-            <p className="px-2 py-2 text-xs opacity-40">No projects yet.</p>
+            <p className="px-2 py-1 text-xs opacity-40">No projects yet.</p>
           )}
           {projects.map((p) => {
             const active = currentProjectId === p.id;
@@ -91,6 +131,25 @@ export function AppShell({
               </Link>
             );
           })}
+
+          {/* Docs */}
+          <div className="flex items-center justify-between px-2 pb-1 pt-4">
+            <span className="text-xs font-medium uppercase tracking-wide opacity-40">
+              Docs
+            </span>
+            <button
+              onClick={newPage}
+              className="rounded px-1.5 text-lg leading-none opacity-50 transition hover:opacity-100"
+              aria-label="New page"
+              title="New page"
+            >
+              +
+            </button>
+          </div>
+          {pages.length === 0 && (
+            <p className="px-2 py-1 text-xs opacity-40">No pages yet.</p>
+          )}
+          {renderPageNodes("root", 0)}
         </nav>
 
         <div className="border-t p-2">

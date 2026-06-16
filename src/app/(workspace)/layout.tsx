@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaces, resolveActiveWorkspace } from "@/lib/workspace";
 import { AppShell } from "@/components/AppShell";
-import type { Project, Profile } from "@/lib/types";
+import type { Page, Project, Profile } from "@/lib/types";
 
 export default async function WorkspaceLayout({
   children,
@@ -26,19 +26,28 @@ export default async function WorkspaceLayout({
 
   const currentWorkspace = (await resolveActiveWorkspace(workspaces))!;
 
-  const { data: projects } = await supabase
-    .from("projects")
-    .select("*")
-    .eq("workspace_id", currentWorkspace.id)
-    .eq("archived", false)
-    .order("position", { ascending: true })
-    .order("created_at", { ascending: true });
+  const [{ data: projects }, { data: pages }] = await Promise.all([
+    supabase
+      .from("projects")
+      .select("*")
+      .eq("workspace_id", currentWorkspace.id)
+      .eq("archived", false)
+      .order("position", { ascending: true })
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("pages")
+      .select("*")
+      .eq("workspace_id", currentWorkspace.id)
+      .eq("archived", false)
+      .order("created_at", { ascending: true }),
+  ]);
 
   return (
     <AppShell
       workspace={currentWorkspace}
       workspaces={workspaces}
       projects={(projects ?? []) as Project[]}
+      pages={(pages ?? []) as Page[]}
       profile={(profile ?? null) as Profile | null}
     >
       {children}

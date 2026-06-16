@@ -112,6 +112,38 @@ export interface Integration {
   updated_at: string;
 }
 
+export type BlockType =
+  | "paragraph"
+  | "h1"
+  | "h2"
+  | "h3"
+  | "bullet"
+  | "todo"
+  | "quote"
+  | "code"
+  | "divider";
+
+export interface Block {
+  id: string;
+  type: BlockType;
+  text: string;
+  checked?: boolean;
+}
+
+export interface Page {
+  id: string;
+  workspace_id: string;
+  parent_id: string | null;
+  title: string;
+  icon: string;
+  content: Block[];
+  position: number;
+  archived: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export const PRIORITY_META: Record<
   TaskPriority,
   { label: string; color: string; rank: number }
