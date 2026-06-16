@@ -5,9 +5,16 @@ import { getWorkspaces, resolveActiveWorkspace } from "@/lib/workspace";
 import { adapters } from "@/lib/integrations/registry";
 import { googleConfigured } from "@/lib/integrations/google";
 import { aiConfigured, AI_MODEL } from "@/lib/ai/client";
+import { SlackLink } from "@/components/SlackLink";
+import type { Project, WorkspaceMember } from "@/lib/types";
 
 export default async function IntegrationsPage() {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
   const workspaces = await getWorkspaces();
   const ws = await resolveActiveWorkspace(workspaces);
   if (!ws) redirect("/onboarding");
@@ -17,6 +24,30 @@ export default async function IntegrationsPage() {
   });
   const google = ((gInfo ?? []) as { connected: boolean; email: string | null }[])[0];
   const googleConnected = google?.connected ?? false;
+
+  const [{ data: members }, { data: projects }, { data: slackInstall }] =
+    await Promise.all([
+      supabase
+        .from("workspace_members")
+        .select("role, user_id")
+        .eq("workspace_id", ws.id),
+      supabase
+        .from("projects")
+        .select("id, name")
+        .eq("workspace_id", ws.id)
+        .eq("archived", false)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("slack_installations")
+        .select("slack_team_id, default_project_id")
+        .eq("workspace_id", ws.id)
+        .maybeSingle(),
+    ]);
+
+  const myRole =
+    ((members ?? []) as WorkspaceMember[]).find((m) => m.user_id === user.id)
+      ?.role ?? "member";
+  const isAdmin = myRole === "owner" || myRole === "admin";
 
   const slack = adapters.slack.status();
 
@@ -52,6 +83,19 @@ export default async function IntegrationsPage() {
           connected={slack.configured}
           note={slack.note}
         />
+
+        {isAdmin && (
+          <SlackLink
+            workspaceId={ws.id}
+            projects={(projects ?? []) as Pick<Project, "id" | "name">[]}
+            installation={
+              (slackInstall as {
+                slack_team_id: string;
+                default_project_id: string | null;
+              } | null) ?? null
+            }
+          />
+        )}
 
         {/* Google (Gmail + Drive) */}
         <Row

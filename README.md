@@ -26,13 +26,17 @@ collaboration, AI, and external integrations.
 - ✅ **Row Level Security** — every table is protected; users only see their
   workspaces
 
+- ✅ **Drag-to-reorder** tasks within and across columns
+- ✅ **Notifications + @mentions** — in-app bell, assignment/comment/mention alerts
+- ✅ **Attachments** — links and Drive files on tasks; **Gmail send** via the assistant
+- ✅ **Saved views** — named filter/sort/mode combos + per-user default
+- ✅ **Two-way Slack** — `/teamspace add|list` slash command and app-mention task creation
+
 ### Roadmap / ideas
 
-- Inline task reordering within a column (drag to position)
-- Saved/filtered views and per-user defaults
-- Page ↔ task links and @mentions
-- Slack slash-command + event subscriptions (two-way)
-- Gmail "send" actions and Drive file attachments on tasks
+- Page ↔ task links and page mentions; email digests
+- Full Slack OAuth install flow (vs. manual team-ID link)
+- Recurring tasks, dependencies, timeline/calendar views
 
 ## Tech stack
 
@@ -91,6 +95,14 @@ Create one at [console.anthropic.com](https://console.anthropic.com) → API Key
 
 Create an [incoming webhook](https://api.slack.com/messaging/webhooks) and copy
 the URL into `SLACK_WEBHOOK_URL`. New tasks will post to that channel.
+
+For **two-way Slack** (slash command + mentions): create a Slack app, set
+`SLACK_SIGNING_SECRET`, point the slash command (`/teamspace`) at
+`${SITE}/api/slack/commands` and Event Subscriptions at
+`${SITE}/api/slack/events` (subscribe to `app_mention`), add a bot token
+(`SLACK_BOT_TOKEN`) so mention replies post back, then link your Slack Team ID +
+default project in **Settings → Integrations** (admins). Requires
+`SUPABASE_SERVICE_ROLE_KEY`.
 
 ### 5b. (Optional) Connect Gmail + Drive
 
