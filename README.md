@@ -6,6 +6,37 @@ A Notion-style project-management app for small teams, connected to **Gmail**,
 A real, runnable build covering the project-management core, docs, team
 collaboration, AI, and external integrations.
 
+## Quickstart — get a working instance (~10 min)
+
+You need two free accounts: **Supabase** (database + auth) and **Anthropic**
+(Claude). Everything else is optional.
+
+1. **Supabase** → create a project. In **SQL Editor**, paste
+   [`supabase/schema.sql`](supabase/schema.sql) and run it once.
+2. **Auth** → Project Settings → Authentication: email magic links work as-is.
+   (Optional: enable the Google provider for "Continue with Google".)
+3. **Anthropic** → create an API key at console.anthropic.com.
+4. **Deploy** — click the button below (works once this is on your default
+   branch), then set the env vars when prompted:
+
+   [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Flucasgcova%2Fhello-world&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,ANTHROPIC_API_KEY,NEXT_PUBLIC_SITE_URL)
+
+   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase →
+     Project Settings → API
+   - `ANTHROPIC_API_KEY` — from step 3
+   - `NEXT_PUBLIC_SITE_URL` — your deployed URL (set after first deploy, then
+     redeploy; also add it to Supabase → Auth → URL Configuration)
+
+   **Or run locally:** `npm install`, copy `.env.example` → `.env.local`, fill
+   the three vars above (`NEXT_PUBLIC_SITE_URL=http://localhost:3000`), then
+   `npm run dev`.
+
+5. Open the app, create a workspace, add a project, and start working. Click
+   **✨ Assistant** to talk to Claude.
+
+Optional add-ons (Slack, Gmail/Drive, service role) are covered under
+[Setup](#setup) below.
+
 ## Features
 
 - ✅ **Auth** — Google sign-in + email magic links (Supabase Auth)
