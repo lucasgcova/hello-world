@@ -1,90 +1,237 @@
-# Welcome to GitHub
+# TeamSpace
 
-Welcome to GitHub—where millions of developers work together on software. Ready to get started? Let’s learn how this all works by building and publishing your first GitHub Pages website!
+A Notion-style project-management app for small teams, connected to **Gmail**,
+**Google Drive**, **Slack**, and **Claude** (via the Anthropic API).
 
-## Repositories
+A real, runnable build covering the project-management core, docs, team
+collaboration, AI, and external integrations.
 
-Right now, we’re in your first GitHub **repository**. A repository is like a folder or storage space for your project. Your project's repository contains all its files such as code, documentation, images, and more. It also tracks every change that you—or your collaborators—make to each file, so you can always go back to previous versions of your project if you make any mistakes.
+## Quickstart — get a working instance (~10 min)
 
-This repository contains three important files: The HTML code for your first website on GitHub, the CSS stylesheet that decorates your website with colors and fonts, and the **README** file. It also contains an image folder, with one image file.
+You need two free accounts: **Supabase** (database + auth) and **Anthropic**
+(Claude). Everything else is optional.
 
-## Describe your project
+1. **Supabase** → create a project. In **SQL Editor**, paste
+   [`supabase/schema.sql`](supabase/schema.sql) and run it once.
+2. **Auth** → Project Settings → Authentication: email magic links work as-is.
+   (Optional: enable the Google provider for "Continue with Google".)
+3. **Anthropic** → create an API key at console.anthropic.com.
+4. **Deploy** — click the button below (works once this is on your default
+   branch), then set the env vars when prompted:
 
-You are currently viewing your project's **README** file. **_README_** files are like cover pages or elevator pitches for your project. They are written in plain text or [Markdown language](https://guides.github.com/features/mastering-markdown/), and usually include a paragraph describing the project, directions on how to use it, who authored it, and more.
+   [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Flucasgcova%2Fhello-world&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,ANTHROPIC_API_KEY,NEXT_PUBLIC_SITE_URL)
 
-[Learn more about READMEs](https://help.github.com/en/articles/about-readmes)
+   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase →
+     Project Settings → API
+   - `ANTHROPIC_API_KEY` — from step 3
+   - `NEXT_PUBLIC_SITE_URL` — your deployed URL (set after first deploy, then
+     redeploy; also add it to Supabase → Auth → URL Configuration)
 
-## Your first website
+   **Or run locally:** `npm install`, copy `.env.example` → `.env.local`, fill
+   the three vars above (`NEXT_PUBLIC_SITE_URL=http://localhost:3000`), then
+   `npm run dev`.
 
-**GitHub Pages** is a free and easy way to create a website using the code that lives in your GitHub repositories. You can use GitHub Pages to build a portfolio of your work, create a personal website, or share a fun project that you coded with the world. GitHub Pages is automatically enabled in this repository, but when you create new repositories in the future, the steps to launch a GitHub Pages website will be slightly different.
+5. Open the app, create a workspace, add a project, and start working. Click
+   **✨ Assistant** to talk to Claude.
 
-[Learn more about GitHub Pages](https://pages.github.com/)
+Optional add-ons (Slack, Gmail/Drive, service role) are covered under
+[Setup](#setup) below.
 
-## Rename this repository to publish your site
+## Features
 
-We've already set-up a GitHub Pages website for you, based on your personal username. This repository is called `hello-world`, but you'll rename it to: `username.github.io`, to match your website's URL address. If the first part of the repository doesn’t exactly match your username, it won’t work, so make sure to get it right.
+- ✅ **Auth** — Google sign-in + email magic links (Supabase Auth)
+- ✅ **Workspaces & members** — multi-workspace switching, role-based access
+- ✅ **Team invitations** — invite by email with shareable links; manage members
+- ✅ **Projects & boards** — Kanban (drag & drop), List, and Table views
+- ✅ **Tasks** — status, priority, assignee, due date, description, comments,
+  labels
+- ✅ **Filtering & sorting** — by search, assignee, priority, label; sort by
+  priority / due date / newest
+- ✅ **Docs / wiki** — Notion-style nested pages with a block editor
+  (headings, lists, to-dos, quotes, code, dividers, slash commands)
+- ✅ **Realtime** — boards and comments update live across the team
+- ✅ **Claude AI assistant** — streaming chat with tool-calling: create tasks,
+  summarize the board, move work, and search Drive/Gmail
+- ✅ **Integrations** — Slack notifications (real), Google Gmail + Drive via
+  OAuth (real), Claude (real); clean adapter layer for adding more
+- ✅ **Row Level Security** — every table is protected; users only see their
+  workspaces
 
-Let's get started! To update this repository’s name, click the `Settings` tab on this page. This will take you to your repository’s settings page. 
+- ✅ **Drag-to-reorder** tasks within and across columns
+- ✅ **Notifications + @mentions** — in-app bell, assignment/comment/mention alerts
+- ✅ **Attachments** — links and Drive files on tasks; **Gmail send** via the assistant
+- ✅ **Saved views** — named filter/sort/mode combos + per-user default
+- ✅ **Two-way Slack** — `/teamspace add|list` slash command and app-mention task creation
 
-![repo-settings-image](https://user-images.githubusercontent.com/18093541/63130482-99e6ad80-bf88-11e9-99a1-d3cf1660b47e.png)
+### Roadmap / ideas
 
-Under the **Repository Name** heading, type: `username.github.io`, where username is your username on GitHub. Then click **Rename**—and that’s it. When you’re done, click your repository name or browser’s back button to return to this page.
+- Page ↔ task links and page mentions; email digests
+- Full Slack OAuth install flow (vs. manual team-ID link)
+- Recurring tasks, dependencies, timeline/calendar views
 
-<img width="1039" alt="rename_screenshot" src="https://user-images.githubusercontent.com/18093541/63129466-956cc580-bf85-11e9-92d8-b028dd483fa5.png">
+## Tech stack
 
-Once you click **Rename**, your website will automatically be published at: https://your-username.github.io/. The HTML file—called `index.html`—is rendered as the home page and you'll be making changes to this file in the next step.
+- **Next.js** (App Router, TypeScript) + **React**
+- **Tailwind CSS v4**
+- **Supabase** — Postgres + Auth + RLS
+- **Anthropic API** (`@anthropic-ai/sdk`) — Claude, server-side
+- Deploy target: **Vercel**
 
-Congratulations! You just launched your first GitHub Pages website. It's now live to share with the entire world
+---
 
-## Making your first edit
+## Setup
 
-When you make any change to any file in your project, you’re making a **commit**. If you fix a typo, update a filename, or edit your code, you can add it to GitHub as a commit. Your commits represent your project’s entire history—and they’re all saved in your project’s repository.
+### 1. Install
 
-With each commit, you have the opportunity to write a **commit message**, a short, meaningful comment describing the change you’re making to a file. So you always know exactly what changed, no matter when you return to a commit.
+```bash
+npm install
+```
 
-## Practice: Customize your first GitHub website by writing HTML code
+### 2. Create a Supabase project
 
-Want to edit the site you just published? Let’s practice commits by introducing yourself in your `index.html` file. Don’t worry about getting it right the first time—you can always build on your introduction later.
+Create one at [supabase.com](https://supabase.com). Then run the migrations
+against it. Either paste the SQL files into **SQL Editor** (in order), or use
+the Supabase CLI:
 
-Let’s start with this template:
+```bash
+# Option A — Supabase CLI (recommended)
+supabase link --project-ref YOUR_PROJECT_REF
+supabase db push   # applies supabase/migrations/*.sql
+
+# Option B — paste supabase/schema.sql (all migrations bundled, in order) into
+# the Supabase SQL Editor and run it once.
+```
+
+Then enable Realtime: the migrations add the relevant tables to the
+`supabase_realtime` publication automatically.
+
+### 3. Enable Google sign-in (for "Continue with Google")
+
+In the Supabase dashboard → **Authentication → Providers → Google**, enable it
+and add your Google OAuth client ID/secret (create one in the
+[Google Cloud Console](https://console.cloud.google.com/apis/credentials)).
+Add this redirect URL to both Google and Supabase:
 
 ```
-<p>Hello World! I’m [username]. This is my website!</p>
+https://YOUR-PROJECT.supabase.co/auth/v1/callback
 ```
 
-To add your introduction, copy our template and click the edit pencil icon at the top right hand corner of the `index.html` file.
+Email magic links work out of the box with no extra setup.
 
-<img width="997" alt="edit-this-file" src="https://user-images.githubusercontent.com/18093541/63131820-0794d880-bf8d-11e9-8b3d-c096355e9389.png">
+### 4. Get a Claude API key
 
+Create one at [console.anthropic.com](https://console.anthropic.com) → API Keys.
 
-Delete this placeholder line:
+### 5. (Optional) Slack notifications
+
+Create an [incoming webhook](https://api.slack.com/messaging/webhooks) and copy
+the URL into `SLACK_WEBHOOK_URL`. New tasks will post to that channel.
+
+For **two-way Slack** (slash command + mentions): create a Slack app, set
+`SLACK_SIGNING_SECRET`, point the slash command (`/teamspace`) at
+`${SITE}/api/slack/commands` and Event Subscriptions at
+`${SITE}/api/slack/events` (subscribe to `app_mention`), add a bot token
+(`SLACK_BOT_TOKEN`) so mention replies post back, then link your Slack Team ID +
+default project in **Settings → Integrations** (admins). Requires
+`SUPABASE_SERVICE_ROLE_KEY`.
+
+### 5b. (Optional) Connect Gmail + Drive
+
+1. In the [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+   create an **OAuth client (Web application)**.
+2. Add the redirect URI `${NEXT_PUBLIC_SITE_URL}/api/integrations/google/callback`
+   (e.g. `http://localhost:3000/api/integrations/google/callback`).
+3. Enable the **Gmail API** and **Drive API** for the project.
+4. Put the client id/secret in `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
+5. Set `SUPABASE_SERVICE_ROLE_KEY` (the assistant reads Google tokens
+   server-side with it; tokens are never exposed to the browser).
+6. In the app, go to **Settings → Integrations → Connect** (workspace admins).
+
+### 6. Environment variables
+
+```bash
+cp .env.example .env.local
+# then fill in the values
+```
+
+At minimum you need `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+and `ANTHROPIC_API_KEY`.
+
+### 7. Run
+
+```bash
+npm run dev
+# http://localhost:3000
+```
+
+Sign in, create a workspace, create a project, and start adding tasks. Click
+**✨ Assistant** (bottom-right) to talk to Claude.
+
+---
+
+## Project structure
 
 ```
-<p>Welcome to your first GitHub Pages website!</p>
+supabase/migrations/      SQL schema + Row Level Security
+src/
+  app/
+    login/                Auth UI (Google + magic link)
+    auth/                 OAuth callback + sign-out
+    onboarding/           First-run workspace creation
+    (workspace)/          Authenticated app shell + pages
+      page.tsx            Home → first project / empty state
+      projects/[id]/      Board (Kanban / List / Table)
+      settings/           Integrations status
+    api/ai/route.ts       Claude streaming + tool-use endpoint
+  components/             AppShell, Board, TaskDialog, AssistantPanel
+  lib/
+    supabase/             Browser/server/middleware clients
+    actions/              Server Actions (workspaces, projects, tasks)
+    ai/                   Anthropic client, tool definitions, prompt
+    integrations/         Adapter interface + slack/gmail/gdrive + registry
+    types.ts              Shared domain types
+middleware.ts             Session refresh + route protection
 ```
 
-Then, paste the template to line 15 and fill in the blanks.
+## How the AI assistant works
 
-<img width="1032" alt="edit-githuboctocat-index" src="https://user-images.githubusercontent.com/18093541/63132339-c3a2d300-bf8e-11e9-8222-59c2702f6c42.png">
+`src/app/api/ai/route.ts` runs a streaming tool-use loop with Claude:
 
+1. Loads the user's session (so all DB access is scoped by RLS).
+2. Streams text deltas to the browser over SSE.
+3. When Claude calls a tool (`create_task`, `list_tasks`, `update_task_status`),
+   the server executes it against Supabase **as the signed-in user**, feeds the
+   result back, and continues.
 
-When you’re done, scroll down to the `Commit changes` section near the bottom of the edit page. Add a short message explaining your change, like "Add my introduction", then click `Commit changes`.
+The model defaults to `claude-opus-4-8`. Set `ANTHROPIC_MODEL=claude-sonnet-4-6`
+for lower cost/latency. Tool definitions and the system prompt live in
+`src/lib/ai/tools.ts`.
 
+## How integrations are structured
 
-<img width="1030" alt="add-my-username" src="https://user-images.githubusercontent.com/18093541/63131801-efbd5480-bf8c-11e9-9806-89273f027d16.png">
+- **Slack** — notification adapter (`src/lib/integrations/slack.ts`) registered
+  in the registry. `notifyAll()` fans out through every configured adapter and
+  never throws, so a failing integration can't break the action that triggered
+  it. New tasks post to Slack.
+- **Google (Gmail + Drive)** — real OAuth in `src/lib/integrations/google.ts`.
+  One per-workspace connection grants both. Tokens live in the admin-only
+  `google_connections` table and are read/refreshed server-side with the service
+  role; the AI assistant calls `search_drive` / `search_email` tools.
+- **Adding a new notifier** — implement the `IntegrationAdapter` interface and
+  register it in `registry.ts`; it's picked up everywhere automatically.
 
-Once you click `Commit changes`, your changes will automatically be published on your GitHub Pages website. Refresh the page to see your new changes live in action.
+## Deploying to Vercel
 
-:tada: You just made your first commit! :tada:
+1. Push this repo and import it in Vercel.
+2. Add all env vars from `.env.example` (use your production Supabase + Anthropic
+   keys). Set `NEXT_PUBLIC_SITE_URL` to your Vercel URL.
+3. In Supabase → **Authentication → URL Configuration**, add your Vercel domain
+   and `https://YOUR-APP.vercel.app/auth/callback` as redirect URLs.
 
-## Extra Credit: Keep on building!
+## Regenerating database types (optional)
 
-Change the placeholder Octocat gif on your GitHub Pages website by [creating your own personal Octocat emoji](https://myoctocat.com/build-your-octocat/) or [choose a different Octocat gif from our logo library here](https://octodex.github.com/). Add that image to line 12 of your `index.html` file, in place of the `<img src=` link.
+For end-to-end typed Supabase queries, once your project is linked:
 
-Want to add even more code and fun styles to your GitHub Pages website? [Follow these instructions](https://github.com/github/personal-website) to build a fully-fledged static website.
-
-![octocat](./images/create-octocat.png)
-
-## Everything you need to know about GitHub
-
-Getting started is the hardest part. If there’s anything you’d like to know as you get started with GitHub, try searching [GitHub Help](https://help.github.com). Our documentation has tutorials on everything from changing your repository settings to configuring GitHub from your command line.
+```bash
+npm run db:types   # writes src/lib/supabase/database.types.ts
+```
