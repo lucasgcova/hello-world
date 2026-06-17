@@ -67,8 +67,8 @@ the Supabase CLI:
 supabase link --project-ref YOUR_PROJECT_REF
 supabase db push   # applies supabase/migrations/*.sql
 
-# Option B — paste each file in supabase/migrations/ (0001 … 0006) into the
-# Supabase SQL Editor and run them in order.
+# Option B — paste supabase/schema.sql (all migrations bundled, in order) into
+# the Supabase SQL Editor and run it once.
 ```
 
 Then enable Realtime: the migrations add the relevant tables to the
